@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>STV On — CTU Submission Tool</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background:#111; color:#ddd; font-family:system-ui,sans-serif; font-size:14px; min-height:100vh; display:flex; flex-direction:column; }
+
+/* ── HEADER ── */
+header { background:#1c1c1c; border-bottom:1px solid #2e2e2e; padding:14px 24px; display:flex; align-items:center; justify-content:space-between; }
+header h1 { font-size:18px; color:#fff; display:flex; align-items:center; gap:10px; }
+header h1 span { color:#e63030; }
+header p { font-size:11px; color:#555; margin-top:4px; }
+
+.steps { display:flex; align-items:center; gap:8px; }
+.step-block { display:flex; align-items:center; gap:8px; }
+.step-circle { width:32px; height:32px; border-radius:50%; border:1.5px solid #333; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; color:#555; transition:all .2s; flex-shrink:0; }
+.step-circle.active { border-color:#00c864; color:#00c864; background:rgba(0,200,100,0.08); }
+.step-circle.done   { border-color:#00c864; background:#00c864; color:#000; }
+.step-label { font-size:11px; color:#555; white-space:nowrap; transition:color .2s; }
+.step-label.active { color:#00c864; }
+.step-label.done   { color:#aaa; }
+.step-div { width:32px; height:1.5px; background:#2e2e2e; }
+
+/* ── LAYOUT: sidebar left, main right ── */
+.workspace { display:flex; gap:0; flex:1; }
+
+/* ── SIDEBAR ── */
+.sidebar {
+  width:260px; flex-shrink:0;
+  background:#1c1c1c; border-right:1px solid #2a2a2a;
+  display:flex; flex-direction:column; gap:0;
+  position:sticky; top:0; height:calc(100vh - 57px); overflow-y:auto;
+}
+.sidebar-section { padding:16px; border-bottom:1px solid #222; display:flex; flex-direction:column; gap:10px; }
+.sidebar-section:last-child { border-bottom:none; }
+.sidebar h2 { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#666; }
+
+button.primary { background:#e63030; color:#fff; border:none; border-radius:5px; padding:9px; font-size:13px; font-weight:600; cursor:pointer; width:100%; }
+button.primary:hover { background:#c82020; }
+
+.btn-group { display:flex; flex-direction:column; gap:5px; }
+button.zone-btn { background:#252525; color:#aaa; border:1px solid #333; border-radius:5px; padding:6px 10px; font-size:11px; cursor:pointer; text-align:left; }
+button.zone-btn:hover { background:#2d2d2d; color:#ddd; }
+button.zone-btn.active { background:#1a3a28; border-color:#00c864; color:#00c864; }
+
+.ctrl { display:flex; flex-direction:column; gap:3px; font-size:11px; color:#777; }
+.ctrl b { color:#bbb; }
+.ctrl input[type=range] { width:100%; accent-color:#00c864; }
+
+.hint-text { font-size:10px; color:#555; line-height:1.5; }
+
+table.zones { width:100%; font-size:10px; border-collapse:collapse; }
+table.zones td { padding:3px 0; color:#555; }
+table.zones td:first-child { width:90px; font-weight:600; }
+
+/* ── MAIN CONTENT ── */
+.main-content { flex:1; display:flex; flex-direction:column; padding:20px; gap:20px; overflow-y:auto; }
+
+/* ── PREVIEW AREA ── */
+.preview-header { display:flex; justify-content:space-between; align-items:center; font-size:11px; color:#666; text-transform:uppercase; letter-spacing:.07em; }
+.preview-header label { display:flex; align-items:center; gap:5px; cursor:pointer; color:#aaa; font-size:11px; text-transform:none; letter-spacing:0; }
+.preview-header input { accent-color:#00c864; }
+
+#canvas-wrapper { position:relative; border:1px solid #333; border-radius:4px; overflow:hidden; cursor:crosshair; background:repeating-conic-gradient(#1a1a1a 0% 25%,#222 0% 50%) 0 0/20px 20px; }
+#canvas-wrapper.grab { cursor:grab; }
+#canvas-wrapper.grabbing { cursor:grabbing; }
+#main-canvas { display:block; }
+#drop-hint { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; color:#444; pointer-events:none; }
+#drop-hint .icon { font-size:40px; }
+.ruler { display:flex; justify-content:space-between; font-size:9px; color:#444; }
+
+/* ── FORM SECTION ── */
+.form-section { background:#1c1c1c; border:1px solid #2a2a2a; border-radius:6px; overflow:hidden; }
+.form-section-header { padding:12px 18px; border-bottom:1px solid #222; display:flex; align-items:center; gap:10px; }
+.form-section-num { width:22px; height:22px; border-radius:50%; border:1.5px solid #333; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; color:#555; flex-shrink:0; }
+.form-section-num.active { border-color:#00c864; color:#00c864; }
+.form-section-title { font-size:13px; font-weight:600; color:#ccc; }
+.form-section-body { padding:18px; display:flex; flex-direction:column; gap:16px; }
+
+/* ── FORM GRID (2 col for short fields) ── */
+.form-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.form-grid-1 { display:grid; grid-template-columns:1fr; gap:14px; }
+
+.field { display:flex; flex-direction:column; gap:5px; }
+.field-header { display:flex; align-items:baseline; justify-content:space-between; gap:6px; }
+.field-label { font-size:12px; font-weight:700; color:#ccc; }
+.field-sub { font-size:10px; color:#555; line-height:1.45; }
+.req { color:#e63030; }
+.char-counter { font-size:10px; font-weight:700; color:#555; flex-shrink:0; transition:color .2s; }
+.char-counter.ok   { color:#00c864; }
+.char-counter.warn { color:#f59e0b; }
+.char-counter.over { color:#ef4444; }
+
+input[type=text], textarea { width:100%; background:#252525; border:1px solid #333; border-radius:5px; color:#ddd; font-size:12px; font-family:inherit; padding:8px 10px; outline:none; transition:border-color .2s; resize:vertical; }
+input[type=text]:focus, textarea:focus { border-color:#00c864; }
+textarea { min-height:80px; line-height:1.5; }
+.limit-bar { height:2px; border-radius:2px; background:#2a2a2a; overflow:hidden; }
+.limit-fill { height:100%; border-radius:2px; transition:width .2s,background .2s; background:#00c864; }
+
+/* ── SUBMIT SECTION ── */
+.submit-row { display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap; }
+.submit-email { flex:1; min-width:180px; display:flex; flex-direction:column; gap:5px; }
+.sub-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:#666; }
+button.export { background:#00773c; color:#fff; border:none; border-radius:5px; padding:10px 20px; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; flex-shrink:0; }
+button.export:hover { background:#005a2d; }
+button.export:disabled { opacity:.4; cursor:not-allowed; }
+.submit-note { font-size:10px; color:#555; line-height:1.5; margin-top:8px; }
+
+/* ── TOAST ── */
+.toast { position:fixed; bottom:24px; right:24px; z-index:999; background:#1c1c1c; border:1px solid #333; border-radius:8px; padding:12px 16px; font-size:12px; box-shadow:0 6px 24px rgba(0,0,0,.5); display:none; max-width:320px; line-height:1.5; }
+.toast.show    { display:block; animation:fadeIn .2s; }
+.toast.success { border-color:#00c864; }
+.toast.error   { border-color:#e63030; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div>
+    <h1><span>●</span> STV On — CTU Submission Tool</h1>
+    <p>1920 × 1280 px · Safe Zone · Fokus-Zone · Texte übermitteln</p>
+  </div>
+  <div class="steps">
+    <div class="step-block">
+      <div class="step-circle active" id="s1">1</div>
+      <span class="step-label active" id="sl1">Bild laden</span>
+    </div>
+    <div class="step-div"></div>
+    <div class="step-block">
+      <div class="step-circle" id="s2">2</div>
+      <span class="step-label" id="sl2">Texte eingeben</span>
+    </div>
+    <div class="step-div"></div>
+    <div class="step-block">
+      <div class="step-circle" id="s3">3</div>
+      <span class="step-label" id="sl3">Übermitteln</span>
+    </div>
+  </div>
+</header>
+
+<div class="workspace">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+
+    <div class="sidebar-section">
+      <h2>① Bild laden</h2>
+      <input type="file" id="file-input" accept="image/*" style="display:none">
+      <button class="primary" onclick="document.getElementById('file-input').click()">📂 Bild auswählen</button>
+      <p class="hint-text">oder direkt auf die Vorschau ziehen</p>
+    </div>
+
+    <div class="sidebar-section">
+      <h2>Auto-Ausrichtung</h2>
+      <div class="btn-group">
+        <button class="zone-btn active" id="btn-focus" onclick="fitTo('focus')">★ Fokus-Zone (empfohlen)</button>
+        <button class="zone-btn" id="btn-safe"  onclick="fitTo('safe')">✓ Safe Zone</button>
+        <button class="zone-btn" id="btn-full"  onclick="fitTo('full')">⊡ Gesamtbild</button>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <h2>Manuelle Anpassung</h2>
+      <div class="ctrl"><span>Zoom: <b id="zoom-val">100%</b></span><input type="range" id="zoom" min="5" max="500" value="100" oninput="onZoom(this.value)"></div>
+      <div class="ctrl"><span>Horizontal: <b id="x-val">0 px</b></span><input type="range" id="pos-x" min="-1920" max="1920" value="0" oninput="onPosX(this.value)"></div>
+      <div class="ctrl"><span>Vertikal: <b id="y-val">0 px</b></span><input type="range" id="pos-y" min="-1280" max="1280" value="0" oninput="onPosY(this.value)"></div>
+      <p class="hint-text">Maus ziehen · Scrollrad = Zoom</p>
+    </div>
+
+    <div class="sidebar-section">
+      <h2>Zonen-Info</h2>
+      <table class="zones">
+        <tr><td style="color:#ff5050">Gesperrt</td><td>Y 0–160 px (Navigation)</td></tr>
+        <tr><td style="color:#00c864">Safe Zone</td><td>Y 160–768 · X 58–1805</td></tr>
+        <tr><td style="color:#ffdc00">Fokus-Zone</td><td>X 576–1536 · Y 192–768</td></tr>
+        <tr><td style="color:#ff8c00">Text-Zone</td><td>Y 768–1280 px</td></tr>
+      </table>
+    </div>
+
+  </div><!-- /sidebar -->
+
+  <!-- MAIN -->
+  <div class="main-content">
+
+    <!-- Preview -->
+    <div>
+      <div class="preview-header" style="margin-bottom:8px;">
+        <span>Vorschau (50% Größe)</span>
+        <label><input type="checkbox" id="show-zones" checked> Zonen einblenden</label>
+      </div>
+      <div id="canvas-wrapper" style="width:960px;height:640px;">
+        <canvas id="main-canvas" width="960" height="640"></canvas>
+        <div id="drop-hint">
+          <div class="icon">⬆</div>
+          <div>Bild hier ablegen</div>
+          <div style="color:#555;font-size:12px;">oder Button links verwenden</div>
+        </div>
+      </div>
+      <div class="ruler" style="width:960px;margin-top:4px;">
+        <span>0</span><span>576 (Fokus)</span><span>960 (Mitte)</span><span>1536</span><span>1920</span>
+      </div>
+    </div>
+
+    <!-- Form: Texte -->
+    <div class="form-section">
+      <div class="form-section-header">
+        <div class="form-section-num active" id="fn2">2</div>
+        <span class="form-section-title">② Texte &amp; Metadaten</span>
+      </div>
+      <div class="form-section-body">
+
+        <!-- Row 1: Online Title + Longtitel -->
+        <div class="form-grid-2">
+
+          <div class="field">
+            <div class="field-header">
+              <span class="field-label">Online Title STV <span class="req">*</span></span>
+              <span class="char-counter" id="cc_title">0 / 50</span>
+            </div>
+            <p class="field-sub">Einziger Ausspiel-Titel auf STV On. Kurz, prägnant, emotional — kein rein beschreibender Titel.</p>
+            <input type="text" id="f_title" maxlength="50" placeholder="" oninput="updateCounter(this,'cc_title',50,'bar_title')">
+            <div class="limit-bar"><div class="limit-fill" id="bar_title" style="width:0%"></div></div>
+          </div>
+
+          <div class="field">
+            <div class="field-header">
+              <span class="field-label">Longtitel STV <span class="req">*</span></span>
+              <span class="char-counter" id="cc_longtitle">0 / 100</span>
+            </div>
+            <p class="field-sub">SEO-optimiert, relevante Keywords. Nicht auf der Plattform ausgespielt — dient der Suchmaschinenoptimierung.</p>
+            <input type="text" id="f_longtitle" maxlength="100" placeholder="" oninput="updateCounter(this,'cc_longtitle',100,'bar_longtitle')">
+            <div class="limit-bar"><div class="limit-fill" id="bar_longtitle" style="width:0%"></div></div>
+          </div>
+
+        </div>
+
+        <!-- Row 2: Short Teaser (full width) -->
+        <div class="form-grid-1">
+          <div class="field">
+            <div class="field-header">
+              <span class="field-label">Online Short Teaser <span class="req">*</span></span>
+              <span class="char-counter" id="cc_teaser">0 / 72</span>
+            </div>
+            <p class="field-sub">Unterüberschrift im Header-Bereich. Ergänzt den Titel, wiederholt ihn nicht. Liefert zusätzlichen Kontext zu Wettbewerb, Teams oder Format.</p>
+            <input type="text" id="f_teaser" maxlength="72" placeholder="" oninput="updateCounter(this,'cc_teaser',72,'bar_teaser')">
+            <div class="limit-bar"><div class="limit-fill" id="bar_teaser" style="width:0%"></div></div>
+          </div>
+        </div>
+
+        <!-- Row 3: Short Description (full width) -->
+        <div class="form-grid-1">
+          <div class="field">
+            <div class="field-header">
+              <span class="field-label">Short Description STV <span class="req">*</span></span>
+              <span class="char-counter" id="cc_desc">0 / 500</span>
+            </div>
+            <p class="field-sub">Beschreibung unter dem Video. Wichtigste Informationen stehen am Anfang. Optimal: 200–300 Zeichen, max. 500 Zeichen.</p>
+            <textarea id="f_desc" maxlength="500" rows="4" placeholder="" oninput="updateCounter(this,'cc_desc',500,'bar_desc')"></textarea>
+            <div class="limit-bar"><div class="limit-fill" id="bar_desc" style="width:0%"></div></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Form: Submit -->
+    <div class="form-section">
+      <div class="form-section-header">
+        <div class="form-section-num" id="fn3">3</div>
+        <span class="form-section-title">③ Übermitteln an CTU</span>
+      </div>
+      <div class="form-section-body">
+        <div class="submit-row">
+          <div class="submit-email">
+            <div class="sub-label">Empfänger (CTU)</div>
+            <input type="text" id="f_email" value="ctu@servustv.com" placeholder="ctu@servustv.com">
+          </div>
+          <div class="submit-email">
+            <div class="sub-label">Deine E-Mail (CC)</div>
+            <input type="text" id="f_sender" placeholder="deine@servustv.com">
+          </div>
+          <button class="export" id="export-btn" disabled onclick="submitToCTU()">✉ Übermitteln an CTU</button>
+        </div>
+        <p class="submit-note">Das Bild wird als PNG gespeichert. Dein Mail-Programm öffnet sich mit allen Texten vorausgefüllt — Bild bitte manuell anhängen.</p>
+      </div>
+    </div>
+
+  </div><!-- /main-content -->
+</div><!-- /workspace -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+const ZONES=[
+  {key:'locked',x:0,  y:0,  w:1920,h:160, label:'GESPERRTE ZONE',  color:'rgba(255,80,80,0.30)', border:'#ff5050'},
+  {key:'safe',  x:58, y:160,w:1747,h:608, label:'SAFE ZONE',        color:'rgba(0,200,100,0.10)',border:'#00c864'},
+  {key:'focus', x:576,y:192,w:960, h:576, label:'FOKUS-ZONE',       color:'rgba(255,220,0,0.13)',border:'#ffdc00'},
+  {key:'text',  x:0,  y:768,w:1920,h:512, label:'TEXT-OVERLAY ZONE',color:'rgba(255,140,0,0.18)',border:'#ff8c00'},
+];
+const SCALE=0.5,CW=1920,CH=1280,PW=960,PH=640;
+const canvas=document.getElementById('main-canvas');
+const ctx=canvas.getContext('2d');
+const wrapper=document.getElementById('canvas-wrapper');
+const hint=document.getElementById('drop-hint');
+let img=null,posX=0,posY=0,zoom=1,fitMode='focus';
+let dragging=false,dragStartX,dragStartY,dragPosX,dragPosY;
+
+function render(){
+  ctx.clearRect(0,0,PW,PH);
+  ctx.fillStyle='#1a1a1a';ctx.fillRect(0,0,PW,PH);
+  if(img) ctx.drawImage(img,posX*SCALE,posY*SCALE,img.naturalWidth*zoom*SCALE,img.naturalHeight*zoom*SCALE);
+  if(document.getElementById('show-zones').checked){
+    ZONES.forEach(z=>{
+      const x=z.x*SCALE,y=z.y*SCALE,w=z.w*SCALE,h=z.h*SCALE;
+      ctx.fillStyle=z.color;ctx.fillRect(x,y,w,h);
+      ctx.strokeStyle=z.border;ctx.lineWidth=1.5;
+      ctx.setLineDash([5,4]);ctx.strokeRect(x,y,w,h);ctx.setLineDash([]);
+      ctx.fillStyle=z.border;ctx.font='bold 9px system-ui';
+      ctx.fillText(z.label,x+5,y+13);
+    });
+  }
+}
+
+function fitTo(mode){
+  fitMode=mode;
+  ['focus','safe','full'].forEach(k=>document.getElementById('btn-'+k).classList.remove('active'));
+  document.getElementById('btn-'+mode).classList.add('active');
+  if(!img)return;
+  const zones={focus:{x:576,y:192,w:960,h:576},safe:{x:58,y:160,w:1747,h:608},full:{x:0,y:0,w:1920,h:1280}};
+  const z=zones[mode];
+  zoom=Math.max(z.w/img.naturalWidth,z.h/img.naturalHeight);
+  posX=z.x+(z.w-img.naturalWidth*zoom)/2;
+  posY=z.y+(z.h-img.naturalHeight*zoom)/2;
+  updateSliders();render();
+}
+
+function updateSliders(){
+  document.getElementById('zoom').value=Math.round(zoom*100);
+  document.getElementById('pos-x').value=Math.round(posX);
+  document.getElementById('pos-y').value=Math.round(posY);
+  document.getElementById('zoom-val').textContent=Math.round(zoom*100)+'%';
+  document.getElementById('x-val').textContent=Math.round(posX)+' px';
+  document.getElementById('y-val').textContent=Math.round(posY)+' px';
+}
+function onZoom(v){zoom=v/100;document.getElementById('zoom-val').textContent=v+'%';render();}
+function onPosX(v){posX=+v;document.getElementById('x-val').textContent=v+' px';render();}
+function onPosY(v){posY=+v;document.getElementById('y-val').textContent=v+' px';render();}
+
+canvas.addEventListener('mousedown',e=>{if(!img)return;dragging=true;dragStartX=e.clientX;dragStartY=e.clientY;dragPosX=posX;dragPosY=posY;wrapper.className='grabbing';});
+window.addEventListener('mousemove',e=>{if(!dragging)return;posX=dragPosX+(e.clientX-dragStartX)/SCALE;posY=dragPosY+(e.clientY-dragStartY)/SCALE;updateSliders();render();});
+window.addEventListener('mouseup',()=>{dragging=false;wrapper.className=img?'grab':'';});
+canvas.addEventListener('wheel',e=>{if(!img)return;e.preventDefault();zoom*=e.deltaY<0?1.05:0.95;zoom=Math.max(0.05,Math.min(10,zoom));updateSliders();render();},{passive:false});
+
+document.getElementById('file-input').addEventListener('change',e=>loadFile(e.target.files[0]));
+wrapper.addEventListener('dragover',e=>e.preventDefault());
+wrapper.addEventListener('drop',e=>{e.preventDefault();loadFile(e.dataTransfer.files[0]);});
+
+function setStep(n){
+  [1,2,3].forEach(i=>{
+    const c=document.getElementById('s'+i);
+    const l=document.getElementById('sl'+i);
+    if(i<n){c.className='step-circle done';l.className='step-label done';}
+    else if(i===n){c.className='step-circle active';l.className='step-label active';}
+    else{c.className='step-circle';l.className='step-label';}
+  });
+  document.getElementById('fn2').className='form-section-num'+(n>=2?' active':'');
+  document.getElementById('fn3').className='form-section-num'+(n>=3?' active':'');
+}
+
+function loadFile(file){
+  if(!file||!file.type.startsWith('image/'))return;
+  const i=new Image();
+  i.onload=()=>{
+    img=i;hint.style.display='none';wrapper.className='grab';
+    document.getElementById('export-btn').disabled=false;
+    setStep(2);fitTo(fitMode);
+  };
+  i.src=URL.createObjectURL(file);
+}
+
+document.getElementById('show-zones').addEventListener('change',render);
+
+function updateCounter(el,ccId,max,barId){
+  const len=el.value.length,pct=(len/max)*100;
+  const cc=document.getElementById(ccId),bar=document.getElementById(barId);
+  cc.textContent=`${len} / ${max}`;
+  cc.className='char-counter'+(pct>=100?' over':pct>=85?' warn':len>0?' ok':'');
+  bar.style.width=Math.min(pct,100)+'%';
+  bar.style.background=pct>=100?'#ef4444':pct>=85?'#f59e0b':'#00c864';
+  const allFilled=['f_title','f_longtitle','f_teaser','f_desc'].every(id=>document.getElementById(id).value.trim().length>0);
+  if(allFilled) setStep(3);
+}
+
+function submitToCTU(){
+  const title=document.getElementById('f_title').value.trim();
+  const longtitle=document.getElementById('f_longtitle').value.trim();
+  const teaser=document.getElementById('f_teaser').value.trim();
+  const desc=document.getElementById('f_desc').value.trim();
+  const toEmail=document.getElementById('f_email').value.trim();
+  const fromEmail=document.getElementById('f_sender').value.trim();
+  if(!title){showToast('❌ Online Title STV ist ein Pflichtfeld.','error');return;}
+  if(!longtitle){showToast('❌ Longtitel STV ist ein Pflichtfeld.','error');return;}
+  if(!teaser){showToast('❌ Online Short Teaser ist ein Pflichtfeld.','error');return;}
+  if(!desc){showToast('❌ Short Description STV ist ein Pflichtfeld.','error');return;}
+  if(!toEmail){showToast('❌ Bitte Empfänger-E-Mail eingeben.','error');return;}
+  if(img){
+    const out=document.createElement('canvas');
+    out.width=CW;out.height=CH;
+    const c=out.getContext('2d');
+    c.fillStyle='#000';c.fillRect(0,0,CW,CH);
+    c.drawImage(img,posX,posY,img.naturalWidth*zoom,img.naturalHeight*zoom);
+    const a=document.createElement('a');
+    a.download='STV_On_Bild_1920x1280.png';
+    a.href=out.toDataURL('image/png');
+    a.click();
+  }
+  const subject=encodeURIComponent(`STV On CTU – Neue Einreichung: ${title}`);
+  const body=encodeURIComponent(
+`STV On — CTU Einreichung
+════════════════════════════════
+Bitte die nachfolgenden Metadaten für die Ausspielung auf STV On verwenden.
+Das zugeschnittene Keyvisual (1920 × 1280 px) ist diesem Mail als PNG beigefügt.
+
+════════════════════════════════
+ONLINE TITLE STV  (${title.length}/50 Zeichen)
+→ Einziger Titel für die Ausspielung auf STV On
+────────────────────────────────
+${title}
+
+════════════════════════════════
+LONGTITEL STV  (${longtitle.length}/100 Zeichen)
+→ SEO-Titel – wird nicht auf der Plattform ausgespielt
+────────────────────────────────
+${longtitle}
+
+════════════════════════════════
+ONLINE SHORT TEASER  (${teaser.length}/72 Zeichen)
+→ Unterüberschrift im Header-Bereich
+────────────────────────────────
+${teaser}
+
+════════════════════════════════
+SHORT DESCRIPTION STV  (${desc.length}/500 Zeichen)
+→ Beschreibung unter dem Video
+────────────────────────────────
+${desc}
+
+════════════════════════════════
+Übermittelt via STV On CTU Submission Tool`);
+  const cc=fromEmail?`&cc=${encodeURIComponent(fromEmail)}`:'';
+  window.location.href=`mailto:${encodeURIComponent(toEmail)}${cc}?subject=${subject}&body=${body}`;
+  setTimeout(()=>{
+    setStep(3);
+    document.getElementById('s3').className='step-circle done';
+    document.getElementById('sl3').className='step-label done';
+    showToast('✅ Mail-Programm geöffnet. Bitte Bild-Anhang nicht vergessen!','success');
+  },800);
+}
+
+function showToast(msg,type){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.className=`toast show ${type}`;
+  setTimeout(()=>{t.className='toast';},4500);
+}
+
+render();
+</script>
+</body>
+</html>
